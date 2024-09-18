@@ -19,8 +19,19 @@ import {
   Vote as PrismaVote,
 } from "@prisma/client";
 
+import { PasswordService } from "../../auth/password.service";
+import { transformStringFieldUpdateInput } from "../../prisma.util";
+import { LocalStorageService } from "src/storage/providers/local/local.storage.service";
+import { InputJsonValue } from "src/types";
+import { FileDownload, FileUpload } from "src/storage/base/storage.types";
+import { LocalStorageFile } from "src/storage/providers/local/local.storage.types";
+
 export class UserServiceBase {
-  constructor(protected readonly prisma: PrismaService) {}
+  constructor(
+    protected readonly prisma: PrismaService,
+    protected readonly passwordService: PasswordService,
+    protected readonly localStorageService: LocalStorageService
+  ) {}
 
   async count(args: Omit<Prisma.UserCountArgs, "select">): Promise<number> {
     return this.prisma.user.count(args);
@@ -33,13 +44,89 @@ export class UserServiceBase {
     return this.prisma.user.findUnique(args);
   }
   async createUser(args: Prisma.UserCreateArgs): Promise<PrismaUser> {
-    return this.prisma.user.create(args);
+    return this.prisma.user.create({
+      ...args,
+
+      data: {
+        ...args.data,
+        password: await this.passwordService.hash(args.data.password),
+      },
+    });
   }
   async updateUser(args: Prisma.UserUpdateArgs): Promise<PrismaUser> {
-    return this.prisma.user.update(args);
+    return this.prisma.user.update({
+      ...args,
+
+      data: {
+        ...args.data,
+
+        password:
+          args.data.password &&
+          (await transformStringFieldUpdateInput(
+            args.data.password,
+            (password) => this.passwordService.hash(password)
+          )),
+      },
+    });
   }
   async deleteUser(args: Prisma.UserDeleteArgs): Promise<PrismaUser> {
     return this.prisma.user.delete(args);
+  }
+
+  async uploadProfilePicture<T extends Prisma.UserFindUniqueArgs>(
+    args: Prisma.SelectSubset<T, Prisma.UserFindUniqueArgs>,
+    file: FileUpload
+  ): Promise<PrismaUser> {
+    file.filename = `profilePicture-${args.where.id}.${file.filename
+      .split(".")
+      .pop()}`;
+    const containerPath = "profilePicture";
+    const profilePicture = await this.localStorageService.uploadFile(
+      file,
+      [],
+      1000000,
+      containerPath
+    );
+
+    return await this.prisma.user.update({
+      where: args.where,
+
+      data: {
+        profilePicture: profilePicture as InputJsonValue,
+      },
+    });
+  }
+
+  async downloadProfilePicture<T extends Prisma.UserFindUniqueArgs>(
+    args: Prisma.SelectSubset<T, Prisma.UserFindUniqueArgs>
+  ): Promise<FileDownload> {
+    const { profilePicture } = await this.prisma.user.findUniqueOrThrow({
+      where: args.where,
+    });
+
+    return await this.localStorageService.downloadFile(
+      profilePicture as unknown as LocalStorageFile
+    );
+  }
+
+  async deleteProfilePicture<T extends Prisma.UserFindUniqueArgs>(
+    args: Prisma.SelectSubset<T, Prisma.UserFindUniqueArgs>
+  ): Promise<PrismaUser> {
+    const { profilePicture } = await this.prisma.user.findUniqueOrThrow({
+      where: args.where,
+    });
+
+    await this.localStorageService.deleteFile(
+      profilePicture as unknown as LocalStorageFile
+    );
+
+    return await this.prisma.user.update({
+      where: args.where,
+
+      data: {
+        profilePicture: Prisma.DbNull,
+      },
+    });
   }
 
   async findComments(

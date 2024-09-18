@@ -13,6 +13,12 @@ import * as graphql from "@nestjs/graphql";
 import { GraphQLError } from "graphql";
 import { isRecordNotFoundError } from "../../prisma.util";
 import { MetaQueryPayload } from "../../util/MetaQueryPayload";
+import * as nestAccessControl from "nest-access-control";
+import * as gqlACGuard from "../../auth/gqlAC.guard";
+import { GqlDefaultAuthGuard } from "../../auth/gqlDefaultAuth.guard";
+import * as common from "@nestjs/common";
+import { AclFilterResponseInterceptor } from "../../interceptors/aclFilterResponse.interceptor";
+import { AclValidateRequestInterceptor } from "../../interceptors/aclValidateRequest.interceptor";
 import { Vote } from "./Vote";
 import { VoteCountArgs } from "./VoteCountArgs";
 import { VoteFindManyArgs } from "./VoteFindManyArgs";
@@ -23,10 +29,20 @@ import { DeleteVoteArgs } from "./DeleteVoteArgs";
 import { Idea } from "../../idea/base/Idea";
 import { User } from "../../user/base/User";
 import { VoteService } from "../vote.service";
+@common.UseGuards(GqlDefaultAuthGuard, gqlACGuard.GqlACGuard)
 @graphql.Resolver(() => Vote)
 export class VoteResolverBase {
-  constructor(protected readonly service: VoteService) {}
+  constructor(
+    protected readonly service: VoteService,
+    protected readonly rolesBuilder: nestAccessControl.RolesBuilder
+  ) {}
 
+  @graphql.Query(() => MetaQueryPayload)
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "read",
+    possession: "any",
+  })
   async _votesMeta(
     @graphql.Args() args: VoteCountArgs
   ): Promise<MetaQueryPayload> {
@@ -36,12 +52,24 @@ export class VoteResolverBase {
     };
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @graphql.Query(() => [Vote])
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "read",
+    possession: "any",
+  })
   async votes(@graphql.Args() args: VoteFindManyArgs): Promise<Vote[]> {
     return this.service.votes(args);
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @graphql.Query(() => Vote, { nullable: true })
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "read",
+    possession: "own",
+  })
   async vote(@graphql.Args() args: VoteFindUniqueArgs): Promise<Vote | null> {
     const result = await this.service.vote(args);
     if (result === null) {
@@ -50,7 +78,13 @@ export class VoteResolverBase {
     return result;
   }
 
+  @common.UseInterceptors(AclValidateRequestInterceptor)
   @graphql.Mutation(() => Vote)
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "create",
+    possession: "any",
+  })
   async createVote(@graphql.Args() args: CreateVoteArgs): Promise<Vote> {
     return await this.service.createVote({
       ...args,
@@ -72,7 +106,13 @@ export class VoteResolverBase {
     });
   }
 
+  @common.UseInterceptors(AclValidateRequestInterceptor)
   @graphql.Mutation(() => Vote)
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "update",
+    possession: "any",
+  })
   async updateVote(@graphql.Args() args: UpdateVoteArgs): Promise<Vote | null> {
     try {
       return await this.service.updateVote({
@@ -104,6 +144,11 @@ export class VoteResolverBase {
   }
 
   @graphql.Mutation(() => Vote)
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "delete",
+    possession: "any",
+  })
   async deleteVote(@graphql.Args() args: DeleteVoteArgs): Promise<Vote | null> {
     try {
       return await this.service.deleteVote(args);
@@ -117,9 +162,15 @@ export class VoteResolverBase {
     }
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @graphql.ResolveField(() => Idea, {
     nullable: true,
     name: "idea",
+  })
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "read",
+    possession: "any",
   })
   async getIdea(@graphql.Parent() parent: Vote): Promise<Idea | null> {
     const result = await this.service.getIdea(parent.id);
@@ -130,9 +181,15 @@ export class VoteResolverBase {
     return result;
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @graphql.ResolveField(() => User, {
     nullable: true,
     name: "user",
+  })
+  @nestAccessControl.UseRoles({
+    resource: "User",
+    action: "read",
+    possession: "any",
   })
   async getUser(@graphql.Parent() parent: Vote): Promise<User | null> {
     const result = await this.service.getUser(parent.id);

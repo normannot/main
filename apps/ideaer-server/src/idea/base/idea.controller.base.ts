@@ -16,7 +16,11 @@ import * as errors from "../../errors";
 import { Request } from "express";
 import { plainToClass } from "class-transformer";
 import { ApiNestedQuery } from "../../decorators/api-nested-query.decorator";
+import * as nestAccessControl from "nest-access-control";
+import * as defaultAuthGuard from "../../auth/defaultAuth.guard";
 import { IdeaService } from "../idea.service";
+import { AclValidateRequestInterceptor } from "../../interceptors/aclValidateRequest.interceptor";
+import { AclFilterResponseInterceptor } from "../../interceptors/aclFilterResponse.interceptor";
 import { IdeaCreateInput } from "./IdeaCreateInput";
 import { Idea } from "./Idea";
 import { IdeaFindManyArgs } from "./IdeaFindManyArgs";
@@ -29,10 +33,24 @@ import { VoteFindManyArgs } from "../../vote/base/VoteFindManyArgs";
 import { Vote } from "../../vote/base/Vote";
 import { VoteWhereUniqueInput } from "../../vote/base/VoteWhereUniqueInput";
 
+@swagger.ApiBearerAuth()
+@common.UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
 export class IdeaControllerBase {
-  constructor(protected readonly service: IdeaService) {}
+  constructor(
+    protected readonly service: IdeaService,
+    protected readonly rolesBuilder: nestAccessControl.RolesBuilder
+  ) {}
+  @common.UseInterceptors(AclValidateRequestInterceptor)
   @common.Post()
   @swagger.ApiCreatedResponse({ type: Idea })
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "create",
+    possession: "any",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
   async createIdea(@common.Body() data: IdeaCreateInput): Promise<Idea> {
     return await this.service.createIdea({
       data: {
@@ -60,9 +78,18 @@ export class IdeaControllerBase {
     });
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @common.Get()
   @swagger.ApiOkResponse({ type: [Idea] })
   @ApiNestedQuery(IdeaFindManyArgs)
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "read",
+    possession: "any",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
   async ideas(@common.Req() request: Request): Promise<Idea[]> {
     const args = plainToClass(IdeaFindManyArgs, request.query);
     return this.service.ideas({
@@ -83,9 +110,18 @@ export class IdeaControllerBase {
     });
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @common.Get("/:id")
   @swagger.ApiOkResponse({ type: Idea })
   @swagger.ApiNotFoundResponse({ type: errors.NotFoundException })
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "read",
+    possession: "own",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
   async idea(
     @common.Param() params: IdeaWhereUniqueInput
   ): Promise<Idea | null> {
@@ -113,9 +149,18 @@ export class IdeaControllerBase {
     return result;
   }
 
+  @common.UseInterceptors(AclValidateRequestInterceptor)
   @common.Patch("/:id")
   @swagger.ApiOkResponse({ type: Idea })
   @swagger.ApiNotFoundResponse({ type: errors.NotFoundException })
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "update",
+    possession: "any",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
   async updateIdea(
     @common.Param() params: IdeaWhereUniqueInput,
     @common.Body() data: IdeaUpdateInput
@@ -159,6 +204,14 @@ export class IdeaControllerBase {
   @common.Delete("/:id")
   @swagger.ApiOkResponse({ type: Idea })
   @swagger.ApiNotFoundResponse({ type: errors.NotFoundException })
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "delete",
+    possession: "any",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
   async deleteIdea(
     @common.Param() params: IdeaWhereUniqueInput
   ): Promise<Idea | null> {
@@ -189,8 +242,14 @@ export class IdeaControllerBase {
     }
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @common.Get("/:id/comments")
   @ApiNestedQuery(CommentFindManyArgs)
+  @nestAccessControl.UseRoles({
+    resource: "Comment",
+    action: "read",
+    possession: "any",
+  })
   async findComments(
     @common.Req() request: Request,
     @common.Param() params: IdeaWhereUniqueInput
@@ -227,6 +286,11 @@ export class IdeaControllerBase {
   }
 
   @common.Post("/:id/comments")
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "update",
+    possession: "any",
+  })
   async connectComments(
     @common.Param() params: IdeaWhereUniqueInput,
     @common.Body() body: CommentWhereUniqueInput[]
@@ -244,6 +308,11 @@ export class IdeaControllerBase {
   }
 
   @common.Patch("/:id/comments")
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "update",
+    possession: "any",
+  })
   async updateComments(
     @common.Param() params: IdeaWhereUniqueInput,
     @common.Body() body: CommentWhereUniqueInput[]
@@ -261,6 +330,11 @@ export class IdeaControllerBase {
   }
 
   @common.Delete("/:id/comments")
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "update",
+    possession: "any",
+  })
   async disconnectComments(
     @common.Param() params: IdeaWhereUniqueInput,
     @common.Body() body: CommentWhereUniqueInput[]
@@ -277,8 +351,14 @@ export class IdeaControllerBase {
     });
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @common.Get("/:id/votes")
   @ApiNestedQuery(VoteFindManyArgs)
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "read",
+    possession: "any",
+  })
   async findVotes(
     @common.Req() request: Request,
     @common.Param() params: IdeaWhereUniqueInput
@@ -315,6 +395,11 @@ export class IdeaControllerBase {
   }
 
   @common.Post("/:id/votes")
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "update",
+    possession: "any",
+  })
   async connectVotes(
     @common.Param() params: IdeaWhereUniqueInput,
     @common.Body() body: VoteWhereUniqueInput[]
@@ -332,6 +417,11 @@ export class IdeaControllerBase {
   }
 
   @common.Patch("/:id/votes")
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "update",
+    possession: "any",
+  })
   async updateVotes(
     @common.Param() params: IdeaWhereUniqueInput,
     @common.Body() body: VoteWhereUniqueInput[]
@@ -349,6 +439,11 @@ export class IdeaControllerBase {
   }
 
   @common.Delete("/:id/votes")
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "update",
+    possession: "any",
+  })
   async disconnectVotes(
     @common.Param() params: IdeaWhereUniqueInput,
     @common.Body() body: VoteWhereUniqueInput[]

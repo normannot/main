@@ -16,17 +16,35 @@ import * as errors from "../../errors";
 import { Request } from "express";
 import { plainToClass } from "class-transformer";
 import { ApiNestedQuery } from "../../decorators/api-nested-query.decorator";
+import * as nestAccessControl from "nest-access-control";
+import * as defaultAuthGuard from "../../auth/defaultAuth.guard";
 import { VoteService } from "../vote.service";
+import { AclValidateRequestInterceptor } from "../../interceptors/aclValidateRequest.interceptor";
+import { AclFilterResponseInterceptor } from "../../interceptors/aclFilterResponse.interceptor";
 import { VoteCreateInput } from "./VoteCreateInput";
 import { Vote } from "./Vote";
 import { VoteFindManyArgs } from "./VoteFindManyArgs";
 import { VoteWhereUniqueInput } from "./VoteWhereUniqueInput";
 import { VoteUpdateInput } from "./VoteUpdateInput";
 
+@swagger.ApiBearerAuth()
+@common.UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
 export class VoteControllerBase {
-  constructor(protected readonly service: VoteService) {}
+  constructor(
+    protected readonly service: VoteService,
+    protected readonly rolesBuilder: nestAccessControl.RolesBuilder
+  ) {}
+  @common.UseInterceptors(AclValidateRequestInterceptor)
   @common.Post()
   @swagger.ApiCreatedResponse({ type: Vote })
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "create",
+    possession: "any",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
   async createVote(@common.Body() data: VoteCreateInput): Promise<Vote> {
     return await this.service.createVote({
       data: {
@@ -66,9 +84,18 @@ export class VoteControllerBase {
     });
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @common.Get()
   @swagger.ApiOkResponse({ type: [Vote] })
   @ApiNestedQuery(VoteFindManyArgs)
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "read",
+    possession: "any",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
   async votes(@common.Req() request: Request): Promise<Vote[]> {
     const args = plainToClass(VoteFindManyArgs, request.query);
     return this.service.votes({
@@ -95,9 +122,18 @@ export class VoteControllerBase {
     });
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @common.Get("/:id")
   @swagger.ApiOkResponse({ type: Vote })
   @swagger.ApiNotFoundResponse({ type: errors.NotFoundException })
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "read",
+    possession: "own",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
   async vote(
     @common.Param() params: VoteWhereUniqueInput
   ): Promise<Vote | null> {
@@ -131,9 +167,18 @@ export class VoteControllerBase {
     return result;
   }
 
+  @common.UseInterceptors(AclValidateRequestInterceptor)
   @common.Patch("/:id")
   @swagger.ApiOkResponse({ type: Vote })
   @swagger.ApiNotFoundResponse({ type: errors.NotFoundException })
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "update",
+    possession: "any",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
   async updateVote(
     @common.Param() params: VoteWhereUniqueInput,
     @common.Body() data: VoteUpdateInput
@@ -189,6 +234,14 @@ export class VoteControllerBase {
   @common.Delete("/:id")
   @swagger.ApiOkResponse({ type: Vote })
   @swagger.ApiNotFoundResponse({ type: errors.NotFoundException })
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "delete",
+    possession: "any",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
   async deleteVote(
     @common.Param() params: VoteWhereUniqueInput
   ): Promise<Vote | null> {

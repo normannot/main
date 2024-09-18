@@ -13,6 +13,12 @@ import * as graphql from "@nestjs/graphql";
 import { GraphQLError } from "graphql";
 import { isRecordNotFoundError } from "../../prisma.util";
 import { MetaQueryPayload } from "../../util/MetaQueryPayload";
+import * as nestAccessControl from "nest-access-control";
+import * as gqlACGuard from "../../auth/gqlAC.guard";
+import { GqlDefaultAuthGuard } from "../../auth/gqlDefaultAuth.guard";
+import * as common from "@nestjs/common";
+import { AclFilterResponseInterceptor } from "../../interceptors/aclFilterResponse.interceptor";
+import { AclValidateRequestInterceptor } from "../../interceptors/aclValidateRequest.interceptor";
 import { Idea } from "./Idea";
 import { IdeaCountArgs } from "./IdeaCountArgs";
 import { IdeaFindManyArgs } from "./IdeaFindManyArgs";
@@ -26,10 +32,20 @@ import { VoteFindManyArgs } from "../../vote/base/VoteFindManyArgs";
 import { Vote } from "../../vote/base/Vote";
 import { User } from "../../user/base/User";
 import { IdeaService } from "../idea.service";
+@common.UseGuards(GqlDefaultAuthGuard, gqlACGuard.GqlACGuard)
 @graphql.Resolver(() => Idea)
 export class IdeaResolverBase {
-  constructor(protected readonly service: IdeaService) {}
+  constructor(
+    protected readonly service: IdeaService,
+    protected readonly rolesBuilder: nestAccessControl.RolesBuilder
+  ) {}
 
+  @graphql.Query(() => MetaQueryPayload)
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "read",
+    possession: "any",
+  })
   async _ideasMeta(
     @graphql.Args() args: IdeaCountArgs
   ): Promise<MetaQueryPayload> {
@@ -39,12 +55,24 @@ export class IdeaResolverBase {
     };
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @graphql.Query(() => [Idea])
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "read",
+    possession: "any",
+  })
   async ideas(@graphql.Args() args: IdeaFindManyArgs): Promise<Idea[]> {
     return this.service.ideas(args);
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @graphql.Query(() => Idea, { nullable: true })
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "read",
+    possession: "own",
+  })
   async idea(@graphql.Args() args: IdeaFindUniqueArgs): Promise<Idea | null> {
     const result = await this.service.idea(args);
     if (result === null) {
@@ -53,7 +81,13 @@ export class IdeaResolverBase {
     return result;
   }
 
+  @common.UseInterceptors(AclValidateRequestInterceptor)
   @graphql.Mutation(() => Idea)
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "create",
+    possession: "any",
+  })
   async createIdea(@graphql.Args() args: CreateIdeaArgs): Promise<Idea> {
     return await this.service.createIdea({
       ...args,
@@ -69,7 +103,13 @@ export class IdeaResolverBase {
     });
   }
 
+  @common.UseInterceptors(AclValidateRequestInterceptor)
   @graphql.Mutation(() => Idea)
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "update",
+    possession: "any",
+  })
   async updateIdea(@graphql.Args() args: UpdateIdeaArgs): Promise<Idea | null> {
     try {
       return await this.service.updateIdea({
@@ -95,6 +135,11 @@ export class IdeaResolverBase {
   }
 
   @graphql.Mutation(() => Idea)
+  @nestAccessControl.UseRoles({
+    resource: "Idea",
+    action: "delete",
+    possession: "any",
+  })
   async deleteIdea(@graphql.Args() args: DeleteIdeaArgs): Promise<Idea | null> {
     try {
       return await this.service.deleteIdea(args);
@@ -108,7 +153,13 @@ export class IdeaResolverBase {
     }
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @graphql.ResolveField(() => [Comment], { name: "comments" })
+  @nestAccessControl.UseRoles({
+    resource: "Comment",
+    action: "read",
+    possession: "any",
+  })
   async findComments(
     @graphql.Parent() parent: Idea,
     @graphql.Args() args: CommentFindManyArgs
@@ -122,7 +173,13 @@ export class IdeaResolverBase {
     return results;
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @graphql.ResolveField(() => [Vote], { name: "votes" })
+  @nestAccessControl.UseRoles({
+    resource: "Vote",
+    action: "read",
+    possession: "any",
+  })
   async findVotes(
     @graphql.Parent() parent: Idea,
     @graphql.Args() args: VoteFindManyArgs
@@ -136,9 +193,15 @@ export class IdeaResolverBase {
     return results;
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @graphql.ResolveField(() => User, {
     nullable: true,
     name: "user",
+  })
+  @nestAccessControl.UseRoles({
+    resource: "User",
+    action: "read",
+    possession: "any",
   })
   async getUser(@graphql.Parent() parent: Idea): Promise<User | null> {
     const result = await this.service.getUser(parent.id);
